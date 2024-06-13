@@ -1,6 +1,11 @@
 <Project>
   <PropertyGroup>
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+  </PropertyGroup>
 
-
+  <PropertyGroup Label="Assembly Info">
+    <Company>iterate GmbH</Company>
+    <PackageLicenseFile>$(MSBuildThisFileDirectory)LICENSE.md</PackageLicenseFile>
+    <Version>0.1.0</Version>
   </PropertyGroup>
 </Project>

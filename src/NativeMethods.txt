@@ -1,0 +1,9 @@
+CF_SYNC_ROOT_BASIC_INFO
+CF_SYNC_ROOT_PROVIDER_INFO
+CF_SYNC_ROOT_STANDARD_INFO 
+CfConnectSyncRoot
+CfDisconnectSyncRoot
+CfUnregisterSyncRoot
+CfUpdatePlaceholder
+CreateFile
+FILE_ACCESS_RIGHTS
