@@ -28,5 +28,13 @@ namespace CloudFiles.Troubleshooter
 			""";
 
 		public static string UsageFormat = $"Usage: {Process.GetCurrentProcess().ProcessName} {{0}} {{1}}";
+
+		public static string WhatIf(bool whatIf, bool markup)
+			=> (whatIf, markup) switch
+			{
+				(false, _) => "",
+				(true, false) => "WhatIf: ",
+				(true, true) => "[yellow]WhatIf: [/]"
+			};
 	}
 }

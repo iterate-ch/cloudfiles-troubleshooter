@@ -32,8 +32,8 @@ internal class PruneCommand
 				{{string.Format(UsageFormat, "Prune", "[SyncRoots] [Options]")}}
 				
 				Arguments:
-				  SyncRoots	Paths to Sync Roots to be pruned, delimited by Spaces
-								Same as --SyncRoot
+				  SyncRoots	  Paths to Sync Roots to be pruned, delimited by Spaces
+				               Same as -SyncRoot
 
 				Options:
 				  -SyncRoot	  Adds a Sync Root for pruning,
@@ -57,7 +57,7 @@ internal class PruneCommand
 			Unregistering sync roots:
 			- {{string.Join("\n- ", settings.SyncRoots.Select(v => v.FullName))}}
 			""");
-		if (settings.Confirm && !Confirm("Continue unregistering sync roots"))
+		if (settings.Confirm && !Confirm("Continue unregistering Sync Roots from Filesystem"))
 		{
 			return 0;
 		}
@@ -133,10 +133,11 @@ internal class PruneCommand
 				}
 			}
 			catch
-			{ /* 
-               * Not registered with StorageProviderSyncRootManager
-               * Silently ignore.
-               */
+			{
+				/* 
+				 * Not registered with StorageProviderSyncRootManager
+				 * Silently ignore.
+				 */
 			}
 
 			WriteLine($"Unregistering Sync Root \"{path.FullName}\" from Filesystem");
