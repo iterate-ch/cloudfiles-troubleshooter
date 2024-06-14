@@ -17,16 +17,13 @@ return 0;
 static void PrintHelp()
 {
 	WriteLine($$"""
-		cloudfiles-troubleshooter  Copyright (C) 2024  iterate GmbH
-			This program comes with ABSOLUTELY NO WARRANTY
-			This is free software, and you are welcome to redistribute it
-			under certain conditions
+		{{Preamble}}
 
 		{{string.Format(UsageFormat, "<Command>", "[Options]")}}
 
 		Commands:
-			clean		Cleans the Windows Shell Namespace from stale sync roots.
-			prune		Nukes a broken sync root from the filesystem.
+		  clean       Cleans the Windows Shell Namespace from stale sync roots.
+		  prune       Nukes a broken sync root from the filesystem.
 
 			No, or any other unsupported command will print this Help.
 		""");

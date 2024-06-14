@@ -27,22 +27,20 @@ internal class PruneCommand
 		static void PrintHelp()
 		{
 			WriteLine($$"""
-				cloudfiles-troubleshooter  Copyright (C) 2024  iterate GmbH
-					This program comes with ABSOLUTELY NO WARRANTY
-					This is free software, and you are welcome to redistribute it
-					under certain conditions
+				{{Preamble}}
 				
 				{{string.Format(UsageFormat, "Prune", "[SyncRoots] [Options]")}}
 				
 				Arguments:
-					SyncRoots	Paths to Sync Roots to be pruned, delimited by Spaces
+				  SyncRoots	Paths to Sync Roots to be pruned, delimited by Spaces
 								Same as --SyncRoot
+
 				Options:
-					--SyncRoot	Adds a Sync Root for pruning,
-								specify multiple times for multiple sync roots.
-								Same as SyncRoots-argument.
-					--WhatIf	Don't run any destructive operation.
-					--Confirm	Prompts before any destructive operation for confirmation.
+				  -SyncRoot	  Adds a Sync Root for pruning,
+				              specify multiple times for multiple sync roots.
+				              Same as SyncRoots-argument.
+				  -WhatIf     Don't run any destructive operation.
+				  -Confirm    Prompts before any destructive operation for confirmation.
 				""");
 		}
 	}
@@ -53,6 +51,15 @@ internal class PruneCommand
 		if (!settings.SyncRoots.Any(v => v.Exists))
 		{
 			throw new ArgumentException("No existing SyncRoot found");
+		}
+
+		WriteLine($$"""
+			Unregistering sync roots:
+			- {{string.Join("\n- ", settings.SyncRoots.Select(v => v.FullName))}}
+			""");
+		if (settings.Confirm && !Confirm("Continue unregistering sync roots"))
+		{
+			return 0;
 		}
 
 		foreach (var path in settings.SyncRoots)
@@ -70,31 +77,43 @@ internal class PruneCommand
 					Value: { } connectErrorCode
 				})
 			{
-				WriteException(new Exception("CloudFiles connect attempt to \"{path.FullName}\" failed", Marshal.GetExceptionForHR(connectErrorCode)));
+				WriteException(new Exception($"CloudFiles connect attempt to \"{path.FullName}\" failed", Marshal.GetExceptionForHR(connectErrorCode)));
 				continue;
 			}
-			else using (var syncRootHandle = CreateFile(
-				lpFileName: path.FullName,
-				dwDesiredAccess: (uint)FILE_ACCESS_RIGHTS.FILE_WRITE_EA,
-				dwShareMode: (FILE_SHARE_MODE)7,
-				lpSecurityAttributes: null,
-				dwCreationDisposition: FILE_CREATION_DISPOSITION.OPEN_EXISTING,
-				dwFlagsAndAttributes: FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS,
-				hTemplateFile: null))
+			else try
 				{
+					using var syncRootHandle = CreateFile(
+						lpFileName: path.FullName,
+						dwDesiredAccess: (uint)FILE_ACCESS_RIGHTS.FILE_WRITE_EA,
+						dwShareMode: (FILE_SHARE_MODE)7,
+						lpSecurityAttributes: null,
+						dwCreationDisposition: FILE_CREATION_DISPOSITION.OPEN_EXISTING,
+						dwFlagsAndAttributes: FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS,
+						hTemplateFile: null);
 					// Force mark SyncRoot in Sync & disable on demand population
 					// In case a previous placeholder fetch didn't succeed successfully.
-					CfUpdatePlaceholder(
-						syncRootHandle,
-						null,
-						null,
-						0,
-						default,
-						CF_UPDATE_FLAGS.CF_UPDATE_FLAG_MARK_IN_SYNC | CF_UPDATE_FLAGS.CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION,
-						null, null);
+					WriteLine($"Marking Sync Root \"{path.FullName}\" as InSync and disabling OnDemand population.");
+					if (settings.Confirm && !Confirm("Continue changing Sync Root Flags", false))
+					{
+						continue;
+					}
+					else if (!settings.WhatIf)
+					{
+						CfUpdatePlaceholder(
+							syncRootHandle,
+							null,
+							null,
+							0,
+							default,
+							CF_UPDATE_FLAGS.CF_UPDATE_FLAG_MARK_IN_SYNC | CF_UPDATE_FLAGS.CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION,
+							null, null);
+					}
+				}
+				finally
+				{
+					CfDisconnectSyncRoot(key);
 				}
 
-			CfDisconnectSyncRoot(key);
 
 			WriteLine($"Unregistering \"{path.FullName}\"");
 			try
@@ -102,7 +121,15 @@ internal class PruneCommand
 				var storageFolder = StorageFolder.GetFolderFromPathAsync(path.FullName).GetAwaiter().GetResult();
 				if (StorageProviderSyncRootManager.GetSyncRootInformationForFolder(storageFolder) is { } syncRootInfo)
 				{
-					StorageProviderSyncRootManager.Unregister(syncRootInfo.Id);
+					WriteLine($"Unregistering Sync Root \"{syncRootInfo.DisplayNameResource}\" from Storage Provider Sync Root Manager (Explorer Shell)");
+					if (settings.Confirm && !Confirm("Continue removing Shell Namespace", false))
+					{
+						continue;
+					}
+					else if (!settings.WhatIf)
+					{
+						StorageProviderSyncRootManager.Unregister(syncRootInfo.Id);
+					}
 				}
 			}
 			catch
@@ -112,13 +139,21 @@ internal class PruneCommand
                */
 			}
 
-			CfUnregisterSyncRoot(path.FullName);
+			WriteLine($"Unregistering Sync Root \"{path.FullName}\" from Filesystem");
+			if (settings.Confirm && !Confirm("Continue unregistering from filesystem", false))
+			{
+				continue;
+			}
+			else if (!settings.WhatIf)
+			{
+				CfUnregisterSyncRoot(path.FullName);
+			}
 		}
 
 		return 0;
 	}
 
-	public class PruneCommandSettings : CommandSettings
+	private class PruneCommandSettings : CommandSettings
 	{
 		public List<DirectoryInfo> SyncRoots { get; } = [];
 

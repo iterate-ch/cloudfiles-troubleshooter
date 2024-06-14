@@ -20,6 +20,13 @@ namespace CloudFiles.Troubleshooter
 			new() { Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NONE, Callback = null }
 		];
 
+		public const string Preamble = """
+			cloudfiles-troubleshooter  Copyright (C) 2024  iterate GmbH
+			  This program comes with ABSOLUTELY NO WARRANTY
+			  This is free software, and you are welcome to redistribute it
+			  under certain conditions
+			""";
+
 		public static string UsageFormat = $"Usage: {Process.GetCurrentProcess().ProcessName} {{0}} {{1}}";
 	}
 }
