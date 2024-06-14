@@ -96,7 +96,7 @@ internal class CleanCommand
 
 		protected override void ConsumeRemaining(List<string> args)
 		{
-			base.ConsumeRemaining(args);
+			args.ForEach(v => ParseInclude(OptionType.Argument, v));
 		}
 
 		private OptionResult ParseInclude(OptionType optionType, string? value)

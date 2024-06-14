@@ -165,7 +165,7 @@ internal class PruneCommand
 
 		protected override void ConsumeRemaining(List<string> args)
 		{
-			args.ForEach(AddSyncRoot);
+			args.ForEach(v => ParseSyncRoot(OptionType.Argument, v));
 		}
 
 		private OptionResult ParseSyncRoot(OptionType type, string? value)
