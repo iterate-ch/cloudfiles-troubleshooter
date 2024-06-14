@@ -64,7 +64,7 @@ internal class CleanCommand
 		{
 			try
 			{
-				WriteLine($"Unregistering Sync Root {syncRoot.DisplayNameResource} ({syncRoot.Path})");
+				WriteLine($"Unregistering Sync Root {syncRoot.DisplayNameResource} ({syncRoot.Path.Path})");
 				if (settings.Confirm && !Confirm("Continue?"))
 				{
 					continue;
@@ -74,7 +74,7 @@ internal class CleanCommand
 					StorageProviderSyncRootManager.Unregister(syncRoot.Id);
 				}
 
-				MarkupLineInterpolated($"{WhatIf(settings.WhatIf, true)}Unregistered Sync Root {syncRoot.DisplayNameResource}");
+				MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Unregistered Sync Root {syncRoot.DisplayNameResource}");
 			}
 			catch (Exception e)
 			{
