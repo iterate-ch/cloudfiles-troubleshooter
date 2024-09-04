@@ -126,27 +126,44 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 
 	ValidationResult IAppCommand<PruneCommandSettings>.Validate(CommandContext context, PruneCommandSettings settings)
 	{
-		Matcher? matcher = null;
-		if (settings.Recurse && settings.Include.Length > 0)
-		{
-			matcher = new();
-			matcher.AddIncludePatterns(settings.Include);
-		}
-
 		var syncRootBuilder = ImmutableArray.CreateBuilder<DirectoryInfo>();
-		EnumerationOptions syncRootTraversalOptions = new()
+		if (settings.Recurse)
 		{
-			RecurseSubdirectories = settings.Recurse,
-		};
-		foreach (var item in settings.SyncRoots)
-		{
-			syncRootBuilder.AddRange(
-				new FileSystemEnumerable<DirectoryInfo>(item, Transform, syncRootTraversalOptions)
-				{
-					ShouldIncludePredicate = ShouldInclude,
-					ShouldRecursePredicate = ShoudRecurse,
-				});
+			Matcher? matcher = null;
+			if (settings.Include.Length > 0)
+			{
+				matcher = new();
+				matcher.AddIncludePatterns(settings.Include);
+			}
+
+			EnumerationOptions syncRootTraversalOptions = new()
+			{
+				RecurseSubdirectories = settings.Recurse,
+			};
+			foreach (var item in settings.SyncRoots)
+			{
+				syncRootBuilder.AddRange(
+					new FileSystemEnumerable<DirectoryInfo>(item, Transform, syncRootTraversalOptions)
+					{
+						ShouldIncludePredicate = ShouldInclude,
+						ShouldRecursePredicate = ShoudRecurse,
+					});
+			}
+
+			bool ShouldInclude(ref FileSystemEntry entry)
+			{
+				return entry.IsDirectory
+					&& (matcher?.Match(entry.RootDirectory.ToString(), entry.ToFullPath()).HasMatches ?? true)
+					&& IsSyncRoot(entry.ToFullPath());
+			}
 		}
+		else foreach (var item in settings.SyncRoots)
+			{
+				if (Directory.Exists(item) && IsSyncRoot(item))
+				{
+					syncRootBuilder.Add(new(item));
+				}
+			}
 
 		return (_syncRoots = syncRootBuilder.DrainToImmutable()) is []
 			? ValidationResult.Error("No sync roots specified")
@@ -154,32 +171,17 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 
 		static DirectoryInfo Transform(ref FileSystemEntry entry) => (DirectoryInfo)entry.ToFileSystemInfo();
 
-		bool ShouldInclude(ref FileSystemEntry entry)
-		{
-			if (!entry.IsDirectory)
-			{
-				return false;
-			}
-
-			if (!(matcher?.Match(entry.RootDirectory.ToString(), entry.ToFullPath()).HasMatches ?? true))
-			{
-				return false;
-			}
-
-			return IsSyncRoot(ref entry);
-		}
-
 		bool ShoudRecurse(ref FileSystemEntry entry)
 		{
-			return !IsSyncRoot(ref entry);
+			return !IsSyncRoot(entry.ToFullPath());
 		}
 
 		[SkipLocalsInit]
-		static unsafe bool IsSyncRoot(ref FileSystemEntry entry)
+		static unsafe bool IsSyncRoot(string path)
 		{
 			CF_SYNC_ROOT_BASIC_INFO info;
 			return CfGetSyncRootInfoByPath(
-				FilePath: entry.ToFullPath(),
+				FilePath: path,
 				InfoClass: CF_SYNC_ROOT_INFO_CLASS.CF_SYNC_ROOT_INFO_BASIC,
 				InfoBuffer: &info,
 				InfoBufferLength: (uint)Marshal.SizeOf<CF_SYNC_ROOT_BASIC_INFO>(),
