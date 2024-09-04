@@ -6,28 +6,15 @@ global using static CloudFiles.Troubleshooter.Consts;
 global using static Spectre.Console.AnsiConsole;
 global using static Windows.Win32.PInvoke;
 
-using System.Diagnostics;
-
 using Windows.Win32.Storage.CloudFilters;
 
 namespace CloudFiles.Troubleshooter
 {
-	delegate int CommandHandler(ReadOnlySpan<string> args);
-
 	static unsafe class Consts
 	{
 		public static CF_CALLBACK_REGISTRATION[] NoneCallbackRegistration = [
 			new() { Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NONE, Callback = null }
 		];
-
-		public const string Preamble = """
-			cloudfiles-troubleshooter  Copyright (C) 2024  iterate GmbH
-			  This program comes with ABSOLUTELY NO WARRANTY
-			  This is free software, and you are welcome to redistribute it
-			  under certain conditions
-			""";
-
-		public static string UsageFormat = $"Usage: {Process.GetCurrentProcess().ProcessName} {{0}} {{1}}";
 
 		public static string WhatIf(bool whatIf) => whatIf ? "WhatIf: " : "";
 	}

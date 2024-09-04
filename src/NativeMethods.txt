@@ -3,6 +3,7 @@ CF_SYNC_ROOT_PROVIDER_INFO
 CF_SYNC_ROOT_STANDARD_INFO 
 CfConnectSyncRoot
 CfDisconnectSyncRoot
+CfGetSyncRootInfoByPath
 CfUnregisterSyncRoot
 CfUpdatePlaceholder
 CreateFile

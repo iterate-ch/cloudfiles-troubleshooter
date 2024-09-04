@@ -14,7 +14,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\LICENSE.md" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+      <None Include="..\THIRD-PARTY-NOTICES.txt" Link="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" />
+      <None Include="..\LICENSE.md" Link="COPYING" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,7 +24,12 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Spectre.Console" />
+    <PackageReference Include="Spectre.Console.Cli" />
+  </ItemGroup>
+
+  <ItemGroup Label="MSBuild">
+    <!-- Not Trim friendly -->
+    <TrimmerRootAssembly Include="Spectre.Console.Cli;Spectre.Console" />
   </ItemGroup>
 
 </Project>
