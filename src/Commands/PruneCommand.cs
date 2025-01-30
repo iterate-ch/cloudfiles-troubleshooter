@@ -110,6 +110,8 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 				 */
 			}
 
+			/* TODO Do Registry discovery in UserSyncRoots of HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager */
+
 			MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Unregistering Sync Root \"{path.FullName}\" from Filesystem");
 			if (settings.Confirm && !Confirm("Continue unregistering from filesystem", false))
 			{

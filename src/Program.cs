@@ -33,8 +33,8 @@ internal class Program
 		public override IEnumerable<IRenderable> GetHeader(ICommandModel model, ICommandInfo? command)
 		{
 			return [
-				new Text("""
-					Copyright (C) 2024  iterate GmbH
+				new Text($"""
+					Copyright (C) {DateTime.Now.Year}  iterate GmbH
 					This program comes with ABSOLUTELY NO WARRANTY
 					This is free software, and you are welcome to redistribute it under certain conditions
 					"""), Text.NewLine,
