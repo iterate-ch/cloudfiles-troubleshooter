@@ -1,5 +1,6 @@
 ﻿using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 
 using Microsoft.Extensions.FileSystemGlobbing;
@@ -14,18 +15,30 @@ namespace CloudFiles.Troubleshooter.Commands;
 
 internal class CleanCommand : IAppCommand<CleanCommand.CleanCommandSettings>
 {
-	private ImmutableArray<SyncRootInfo> _syncRoots;
+	private ImmutableArray<SyncRootNamespace> _syncRootNamespaces;
+	private ImmutableArray<KeyValuePair<string, List<SyncRootInfo>>> _syncRoots;
 
 	Task<int> ICommand<CleanCommandSettings>.Execute(CommandContext context, CleanCommandSettings settings)
 	{
 		WriteLine("Sync Roots found:");
-		foreach (var syncRoot in _syncRoots)
+		foreach (var syncRootNamespace in _syncRootNamespaces)
 		{
 			Write("- ");
-			Write(syncRoot.DisplayName);
-			Write(" (");
-			Write(syncRoot.Path);
-			WriteLine(")");
+			WriteLine(syncRootNamespace.Id);
+			foreach (var syncRoot in syncRootNamespace.SyncRoots)
+			{
+				Write("  - ");
+				Color restore = Foreground;
+				if (syncRoot.Remove) Foreground = Color.Green;
+
+				Write(syncRoot.DisplayName);
+				Write(" (");
+				Write(syncRoot.Id);
+				WriteLine(")");
+				Write("    ");
+				WriteLine(syncRoot.Path);
+				Foreground = restore;
+			}
 		}
 
 		if (settings.Confirm && !Confirm("Continue cleaning Sync Roots from Windows Explorer"))
@@ -33,53 +46,112 @@ internal class CleanCommand : IAppCommand<CleanCommand.CleanCommandSettings>
 			return Task.FromResult(0);
 		}
 
-		using var userClsId = GetUserCLSIDKey();
 		using var syncRootManager = GetSyncRootManagerKey();
-		foreach (var syncRoot in _syncRoots)
+		foreach (var syncRootId in _syncRoots)
 		{
-			try
+			var userExclusive = true;
+			using var syncRootKey = syncRootManager.OpenSubKey(syncRootId.Key, true);
+			foreach (var syncRoot in syncRootId.Value)
 			{
-				WriteLine($"Unregistering Sync Root {syncRoot.DisplayName} ({syncRoot.Path})");
-				if (settings.Confirm && !Confirm("Continue?"))
+				if (!syncRoot.Remove)
 				{
+					userExclusive = false;
 					continue;
 				}
-				else if (!settings.WhatIf)
+
+				try
 				{
+					if (settings.WhatIf)
+					{
+						Markup("[yellow]WhatIf: [/]");
+						goto whatIfSyncRootManager;
+					}
+
 					StorageProviderSyncRootManager.Unregister(syncRoot.Id);
+
+				whatIfSyncRootManager:
+					WriteLine($"Unregistered Sync Root {syncRoot.DisplayName} using SyncRootManager");
+				}
+				catch (Exception e)
+				{
+					WriteException(new Exception($"""
+						Unregistering {syncRoot.DisplayName} ({syncRoot.Id})"
+						  {syncRoot.Path}
+						""", e));
 				}
 
-				MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Unregistered Sync Root {syncRoot.DisplayName}");
+				if (settings.WhatIf)
+				{
+					Markup("[yellow]WhatIf: [/]");
+					goto whatIfUserSyncRoot;
+				}
+
+				using (var userSyncRootsKey = syncRootKey?.OpenSubKey("UserSyncRoots", true))
+				{
+					userSyncRootsKey?.DeleteValue(syncRoot.User, false);
+				}
+
+			whatIfUserSyncRoot:
+				WriteLine($"Unregistered {syncRoot.User} from {syncRoot.Id} User Sync Roots");
 			}
-			catch (Exception e)
+
+			if (!userExclusive)
 			{
-				WriteException(new Exception($"Unregistering {syncRoot.DisplayName} ({syncRoot.Id}, {syncRoot.Path})", e));
+				MarkupLineInterpolated($"[yellow]Keeping {syncRootId}, registered for multiple users.[/]");
+				continue;
+			}
+
+			if (settings.WhatIf)
+			{
+				Markup("[yellow]WhatIf: [/]");
+				goto whatIf;
+			}
+
+			syncRootKey?.DeleteSubKeyTree("", false);
+
+		whatIf:
+			WriteLine($"Unregistered {syncRootId.Key} from Registry");
+		}
+
+		using var desktopNamespaceKey = GetUserDesktopNamespaceKey();
+		using var userClsIdKey = GetUserCLSIDKey();
+		foreach (var syncRootNamespace in _syncRootNamespaces)
+		{
+			var empty = true;
+			foreach (var syncRoot in syncRootNamespace.SyncRoots)
+			{
+				empty &= !syncRoot.CurrentUser | syncRoot.Remove;
+			}
+
+			if (!empty)
+			{
+				continue;
 			}
 
 			RegistryKey? unregisteringKey = null;
 			try
 			{
-				if ((unregisteringKey = userClsId.OpenSubKey(syncRoot.NamespaceClsId!, true)) is null)
+				if ((unregisteringKey = desktopNamespaceKey.OpenSubKey(syncRootNamespace.Id, true)) is null)
 				{
 					goto exit;
 				}
 
-				if (settings.Confirm && !Confirm("Continue"))
+				if (settings.WhatIf)
 				{
-					continue;
-				}
-				else if (!settings.WhatIf)
-				{
-					unregisteringKey.DeleteSubKeyTree("", false);
+					Markup("[yellow]WhatIf: [/]");
+					goto whatIf;
 				}
 
-				MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Unregistered Explorer Namespace Class {syncRoot.DisplayName}");
+				unregisteringKey.DeleteSubKeyTree("", false);
+
+			whatIf:
+				WriteLine($"Unregistered Desktop Namespace {syncRootNamespace.Id}");
 
 			exit:;
 			}
 			catch (Exception e)
 			{
-				WriteException(new Exception($"Deleting Explorer Namespace Class \"{unregisteringKey?.Name ?? syncRoot.NamespaceClsId}\"", e));
+				WriteException(new Exception($"Unregistering Desktop Namespace \"{syncRootNamespace.Id}\"", e));
 			}
 			finally
 			{
@@ -88,27 +160,27 @@ internal class CleanCommand : IAppCommand<CleanCommand.CleanCommandSettings>
 
 			try
 			{
-				if ((unregisteringKey = syncRootManager.OpenSubKey(syncRoot.Id, true)) is null)
+				if ((unregisteringKey = userClsIdKey.OpenSubKey(syncRootNamespace.Id, true)) is null)
 				{
 					goto exit;
 				}
 
-				if (settings.Confirm && !Confirm("Continue"))
+				if (settings.WhatIf)
 				{
-					continue;
-				}
-				else if (!settings.WhatIf)
-				{
-					unregisteringKey.DeleteSubKeyTree("", false);
+					Markup("[yellow]WhatIf: [/]");
+					goto whatIf;
 				}
 
-				MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Unregistered Explorer Sync Root {syncRoot.DisplayName}");
+				unregisteringKey.DeleteSubKeyTree("", false);
+
+			whatIf:
+				WriteLine($"Unregistered Classes CLSID {syncRootNamespace.Id}");
 
 			exit:;
 			}
 			catch (Exception e)
 			{
-				WriteException(new Exception($"Deleting Explorer Sync Root Registry \"{unregisteringKey?.Name ?? syncRoot.NamespaceClsId}\"", e));
+				WriteException(new Exception($"Unregistering Classes CLSID  \"{syncRootNamespace.Id}\"", e));
 			}
 			finally
 			{
@@ -136,15 +208,6 @@ internal class CleanCommand : IAppCommand<CleanCommand.CleanCommandSettings>
 			matcher.AddInclude(item);
 		}
 
-		Dictionary<string, SyncRootInfo> syncRoots = [];
-		foreach (var item in StorageProviderSyncRootManager.GetCurrentSyncRoots())
-		{
-			if (matcher.Match(item.DisplayNameResource).HasMatches)
-			{
-				syncRoots[item.Id] = new(item.Id, item.DisplayNameResource, item.Path.Path);
-			}
-		}
-
 		string sid;
 		using (var identity = WindowsIdentity.GetCurrent())
 		{
@@ -156,6 +219,10 @@ internal class CleanCommand : IAppCommand<CleanCommand.CleanCommandSettings>
 			sid = user.ToString();
 		}
 
+		// Collect all system registered sync roots.
+		var any = false;
+		Dictionary<string, SyncRootNamespace> syncRootNamespaces = [];
+		Dictionary<string, List<SyncRootInfo>> syncRoots = [];
 		using var key = GetSyncRootManagerKey();
 		foreach (var item in key.GetSubKeyNames())
 		{
@@ -165,43 +232,42 @@ internal class CleanCommand : IAppCommand<CleanCommand.CleanCommandSettings>
 				continue;
 			}
 
-			if (syncRoots.TryGetValue(item, out var syncRootInfo))
+			var syncRootNamespace = CollectionsMarshal.GetValueRefOrAddDefault(
+				syncRootNamespaces, namespaceClsId,
+				out _) ??= new(namespaceClsId);
+
+			if (subkey?.GetValue("DisplayNameResource") is not string displayName)
 			{
-				syncRootInfo.NamespaceClsId = namespaceClsId;
-			}
-			else if (
-				subkey?.GetValue("DisplayNameResource") is string displayName
-				&& matcher.Match(displayName).HasMatches)
-			{
-				using var userSyncRoots = subkey?.OpenSubKey("UserSyncRoots");
-				var values = userSyncRoots?.GetValueNames() ?? [];
-				if (Array.FindIndex(values, sid.Equals) == -1)
-				{
-					continue;
-				}
-
-				if (values.Length > 1)
-				{
-					continue;
-				}
-
-				if (userSyncRoots?.GetValue(sid) is not string path)
-				{
-					continue;
-				}
-
-				syncRoots[item] = new(item, displayName, path)
-				{
-					NamespaceClsId = namespaceClsId
-				};
+				continue;
 			}
 
+			using var userSyncRootsKey = subkey?.OpenSubKey("UserSyncRoots");
+			if (userSyncRootsKey?.GetValueNames() is not { } userSyncRoots)
+			{
+				continue;
+			}
+
+			foreach (var userSyncRootKey in userSyncRoots)
+			{
+				if (userSyncRootsKey?.GetValue(userSyncRootKey) is not string userSyncRoot)
+				{
+					continue;
+				}
+
+				var isCurrentUser = sid.Equals(userSyncRootKey);
+				var removing = isCurrentUser && matcher.Match(displayName).HasMatches;
+				SyncRootInfo syncRoot = new(item, displayName, userSyncRoot, sid, isCurrentUser, removing);
+				syncRootNamespace.SyncRoots.Add(syncRoot);
+				(CollectionsMarshal.GetValueRefOrAddDefault(
+					syncRoots, item,
+					out _) ??= []).Add(syncRoot);
+				any |= removing;
+			}
 		}
 
-		_syncRoots = [.. syncRoots.Values];
-		return _syncRoots is []
-			? ValidationResult.Error("Filtered SyncRoots returned zero elements")
-			: ValidationResult.Success();
+		_syncRoots = [.. syncRoots];
+		_syncRootNamespaces = [.. syncRootNamespaces.Values];
+		return any ? ValidationResult.Success() : ValidationResult.Error("No Sync Root matched specified filter.");
 	}
 
 	private static RegistryKey GetSyncRootManagerKey()
@@ -216,17 +282,31 @@ internal class CleanCommand : IAppCommand<CleanCommand.CleanCommandSettings>
 		return ((_, key.Value) = (key.Value, default!)).Item1;
 	}
 
+	static RegistryKey GetUserDesktopNamespaceKey()
+	{
+		using Local<RegistryKey> key = Registry.CurrentUser;
+		key.Assign(key.Value.OpenSubKey("SOFTWARE", false)!);
+		key.Assign(key.Value.OpenSubKey("Microsoft", false)!);
+		key.Assign(key.Value.OpenSubKey("Windows", false)!);
+		key.Assign(key.Value.OpenSubKey("CurrentVersion", false)!);
+		key.Assign(key.Value.OpenSubKey("Explorer", false)!);
+		key.Assign(key.Value.OpenSubKey("Desktop", false)!);
+		key.Assign(key.Value.OpenSubKey("Namespace", false)!);
+		return ((_, key.Value) = (key.Value, default!)).Item1;
+	}
+
 	private class CleanCommandSettings : AppCommandSettings
 	{
 		[CommandArgument(0, "<SyncRoots>")]
 		public required string[] SyncRoots { get; init; }
 	}
 
-	private record class SyncRootInfo(string Id, string DisplayName, string Path)
+	private record class SyncRootNamespace(string Id)
 	{
-		[MaybeNull]
-		public string NamespaceClsId { get; set; }
+		public List<SyncRootInfo> SyncRoots { get; } = [];
 	}
+
+	private record class SyncRootInfo(string Id, string DisplayName, string Path, string User, bool CurrentUser, bool Remove);
 
 	private ref struct Local<T>()
 	{
