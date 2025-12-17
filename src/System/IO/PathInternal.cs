@@ -1,29 +1,19 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using System.Linq.Expressions;
-using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Security.AccessControl;
 
 namespace System.IO;
 
 internal static class PathInternal
 {
-	private static Func<string?, string?>? s_ensureExtendedPrefixIfNeeded;
-
 	[return: NotNullIfNotNull(nameof(path))]
 	public static string? EnsureExtendedPrefixIfNeeded(string? path)
 	{
-		s_ensureExtendedPrefixIfNeeded ??= MakeAccess();
-		return s_ensureExtendedPrefixIfNeeded(path);
+		return LocalUnsafeAccess(null, path);
 
-		static Func<string?, string?> MakeAccess()
-		{
-			var type = Type.GetType("System.IO.PathInternal, System.Private.CoreLib");
-			ArgumentNullException.ThrowIfNull(type);
-			var method = type.GetMethod(nameof(EnsureExtendedPrefixIfNeeded), BindingFlags.Static | BindingFlags.NonPublic, [typeof(string)]);
-			ArgumentNullException.ThrowIfNull(method);
+		[UnsafeAccessor(UnsafeAccessorKind.StaticMethod, Name = "EnsureExtendedPrefixIfNeeded")]
+		[return: NotNullIfNotNull(nameof(path))]
+		static extern string? LocalUnsafeAccess([UnsafeAccessorType("System.IO.PathInternal, System.Private.CoreLib")] object? typeHint, string? path);
 
-			var pathParameter = Expression.Parameter(typeof(string));
-			var call = Expression.Call(method, pathParameter);
-			return Expression.Lambda<Func<string?, string?>>(call, pathParameter).Compile();
-		}
 	}
 }
