@@ -55,7 +55,7 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 			}
 			else try
 				{
-					MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Begin recursively resetting \"{path.FullName}\"");
+					MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Begin recursively resetting ACLs on \"{path.FullName}\"");
 					if (settings.Confirm && !Confirm("Continue?", false))
 					{
 						continue;
@@ -71,23 +71,37 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 						dwCreationDisposition: FILE_CREATION_DISPOSITION.OPEN_EXISTING,
 						dwFlagsAndAttributes: FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS,
 						hTemplateFile: null);
-					// Force mark SyncRoot in Sync & disable on demand population
-					// In case a previous placeholder fetch didn't succeed successfully.
-					MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Marking Sync Root \"{path.FullName}\" as InSync and disabling OnDemand population.");
-					if (settings.Confirm && !Confirm("Continue changing Sync Root Flags", false))
+					if (!syncRootHandle.IsInvalid)
 					{
-						continue;
+						// Force mark SyncRoot in Sync & disable on demand population
+						// In case a previous placeholder fetch didn't succeed successfully.
+						MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Marking Sync Root \"{path.FullName}\" as InSync and disabling OnDemand population.");
+						if (settings.Confirm && !Confirm("Continue changing Sync Root Flags", false))
+						{
+							continue;
+						}
+						else if (!settings.WhatIf)
+						{
+							if (CfUpdatePlaceholder(
+								syncRootHandle,
+								null,
+								null,
+								0,
+								default,
+								CF_UPDATE_FLAGS.CF_UPDATE_FLAG_MARK_IN_SYNC | CF_UPDATE_FLAGS.CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION,
+								null, null) is
+								{
+									Failed: true,
+									Value: { } updateError
+								})
+							{
+								MarkupLineInterpolated($"[red]Failure updating placeholder: {Marshal.GetExceptionForHR(updateError)}");
+							}
+						}
 					}
-					else if (!settings.WhatIf)
+					else
 					{
-						CfUpdatePlaceholder(
-							syncRootHandle,
-							null,
-							null,
-							0,
-							default,
-							CF_UPDATE_FLAGS.CF_UPDATE_FLAG_MARK_IN_SYNC | CF_UPDATE_FLAGS.CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION,
-							null, null);
+						MarkupLineInterpolated($"[red]Failure opening sync root with DAC access: {Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error())}");
 					}
 				}
 				finally
