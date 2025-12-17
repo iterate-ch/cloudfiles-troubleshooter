@@ -14,6 +14,13 @@ internal static class PathInternal
 		[UnsafeAccessor(UnsafeAccessorKind.StaticMethod, Name = "EnsureExtendedPrefixIfNeeded")]
 		[return: NotNullIfNotNull(nameof(path))]
 		static extern string? LocalUnsafeAccess([UnsafeAccessorType("System.IO.PathInternal, System.Private.CoreLib")] object? typeHint, string? path);
+	}
 
+	internal static void SetAccessControl(this FileSystemInfo info, FileSystemSecurity security, AccessControlSections includeSections)
+	{
+		LocalUnsafeAccess(security, info.FullName, includeSections);
+
+		[UnsafeAccessor(UnsafeAccessorKind.Method, Name = "Persist")]
+		static extern void LocalUnsafeAccess(NativeObjectSecurity security, string name, AccessControlSections includeSections);
 	}
 }

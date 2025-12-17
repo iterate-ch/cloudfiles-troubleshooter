@@ -1,7 +1,9 @@
 ﻿using System.Collections.Immutable;
+using System.IO;
 using System.IO.Enumeration;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
 
 using Microsoft.Extensions.FileSystemGlobbing;
 
@@ -84,6 +86,14 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 				{
 					CfDisconnectSyncRoot(key);
 				}
+
+			MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Begin recursively resetting \"{path.FullName}\"");
+			if (settings.Confirm && !Confirm("Continue?", false))
+			{
+				continue;
+			}
+
+			ResetAcls(path, settings);
 
 			MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Unregistering \"{path.FullName}\"");
 			try
@@ -188,6 +198,63 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 				InfoBuffer: &info,
 				InfoBufferLength: (uint)Marshal.SizeOf<CF_SYNC_ROOT_BASIC_INFO>(),
 				ReturnedLength: null).Succeeded;
+		}
+	}
+
+	private static void ResetAcls(DirectoryInfo? directory, PruneCommandSettings settings)
+	{
+		DirectorySecurity security = new();
+		security.SetAccessRuleProtection(false, true);
+
+		LinkedList<DirectoryInfo> directories = [];
+		while (directory != null)
+		{
+			try
+			{
+				MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Reset Access-ACLs of \"{directory.FullName}\"");
+				if (settings.Confirm && !Confirm("Continue with this folder?", false))
+				{
+					continue;
+				}
+				else if (!settings.WhatIf)
+				{
+					directory.SetAccessControl(security, AccessControlSections.Access);
+				}
+			}
+			catch { }
+
+			try
+			{
+				foreach (var item in directory.EnumerateFileSystemInfos())
+				{
+					if (item is DirectoryInfo subdir)
+					{
+						directories.AddLast(subdir);
+					}
+					else
+					{
+						try
+						{
+							MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Reset Access-ACLs of \"{item.FullName}\"");
+							if (settings.Confirm && !Confirm("Continue with this file?", false))
+							{
+								continue;
+							}
+							else if (!settings.WhatIf)
+							{
+								item.SetAccessControl(security, AccessControlSections.Access);
+							}
+						}
+						catch { }
+					}
+				}
+			}
+			catch { }
+
+			if ((directory = directories.First?.Value) is not null)
+			{
+				directories.RemoveFirst();
+			}
 		}
 	}
 
