@@ -55,9 +55,17 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 			}
 			else try
 				{
+					MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Begin recursively resetting \"{path.FullName}\"");
+					if (settings.Confirm && !Confirm("Continue?", false))
+					{
+						continue;
+					}
+
+					ResetAcls(path, settings);
+
 					using var syncRootHandle = CreateFile(
 						lpFileName: PathInternal.EnsureExtendedPrefixIfNeeded(path.FullName),
-						dwDesiredAccess: (uint)FILE_ACCESS_RIGHTS.FILE_WRITE_EA,
+						dwDesiredAccess: (uint)FILE_ACCESS_RIGHTS.WRITE_DAC,
 						dwShareMode: (FILE_SHARE_MODE)7,
 						lpSecurityAttributes: null,
 						dwCreationDisposition: FILE_CREATION_DISPOSITION.OPEN_EXISTING,
@@ -86,14 +94,6 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 				{
 					CfDisconnectSyncRoot(key);
 				}
-
-			MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Begin recursively resetting \"{path.FullName}\"");
-			if (settings.Confirm && !Confirm("Continue?", false))
-			{
-				continue;
-			}
-
-			ResetAcls(path, settings);
 
 			MarkupLineInterpolated($"[yellow]{WhatIf(settings.WhatIf)}[/]Unregistering \"{path.FullName}\"");
 			try
