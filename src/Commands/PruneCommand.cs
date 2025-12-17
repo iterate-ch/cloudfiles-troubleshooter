@@ -95,13 +95,13 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 									Value: { } updateError
 								})
 							{
-								MarkupLineInterpolated($"[red]Failure updating placeholder: {Marshal.GetExceptionForHR(updateError)}");
+								MarkupLineInterpolated($"[red]Failure updating placeholder[/]: {Marshal.GetExceptionForHR(updateError)}");
 							}
 						}
 					}
 					else
 					{
-						MarkupLineInterpolated($"[red]Failure opening sync root with DAC access: {Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error())}");
+						MarkupLineInterpolated($"[red]Failure opening sync root with DAC access[/]: {Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error())}");
 					}
 				}
 				finally
