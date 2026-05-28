@@ -18,7 +18,7 @@ internal class CleanCommand : IAppCommand<CleanCommand.CleanCommandSettings>
 	private ImmutableArray<SyncRootNamespace> _syncRootNamespaces;
 	private ImmutableArray<KeyValuePair<string, List<SyncRootInfo>>> _syncRoots;
 
-	Task<int> ICommand<CleanCommandSettings>.Execute(CommandContext context, CleanCommandSettings settings)
+	Task<int> ICommand<CleanCommandSettings>.ExecuteAsync(CommandContext context, CleanCommandSettings settings, CancellationToken cancellationToken)
 	{
 		WriteLine("Sync Roots found:");
 		foreach (var syncRootNamespace in _syncRootNamespaces)

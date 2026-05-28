@@ -1,5 +1,4 @@
 ﻿using System.Collections.Immutable;
-using System.IO;
 using System.IO.Enumeration;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -21,7 +20,7 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 {
 	private ImmutableArray<DirectoryInfo> _syncRoots;
 
-	unsafe Task<int> ICommand<PruneCommandSettings>.Execute(CommandContext context, PruneCommandSettings settings)
+	unsafe Task<int> ICommand<PruneCommandSettings>.ExecuteAsync(CommandContext context, PruneCommandSettings settings, CancellationToken cancellationToken)
 	{
 		WriteLine("Unregistering sync roots:");
 		foreach (var item in _syncRoots)
@@ -43,8 +42,12 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 				continue;
 			}
 
-			CF_CONNECTION_KEY key;
-			if (CfConnectSyncRoot(path.FullName, NoneCallbackRegistration, null, CF_CONNECT_FLAGS.CF_CONNECT_FLAG_NONE, &key) is
+			if (CfConnectSyncRoot(
+				path.FullName,
+				NoneCallbackRegistration,
+				null,
+				CF_CONNECT_FLAGS.CF_CONNECT_FLAG_NONE,
+				out var key) is
 				{
 					Failed: true,
 					Value: { } connectErrorCode
@@ -85,11 +88,9 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 							if (CfUpdatePlaceholder(
 								syncRootHandle,
 								null,
-								null,
-								0,
 								default,
-								CF_UPDATE_FLAGS.CF_UPDATE_FLAG_MARK_IN_SYNC | CF_UPDATE_FLAGS.CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION,
-								null, null) is
+								default,
+								CF_UPDATE_FLAGS.CF_UPDATE_FLAG_MARK_IN_SYNC | CF_UPDATE_FLAGS.CF_UPDATE_FLAG_DISABLE_ON_DEMAND_POPULATION) is
 								{
 									Failed: true,
 									Value: { } updateError
@@ -184,12 +185,12 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 			}
 		}
 		else foreach (var item in settings.SyncRoots)
+		{
+			if (Directory.Exists(item) && IsSyncRoot(item))
 			{
-				if (Directory.Exists(item) && IsSyncRoot(item))
-				{
-					syncRootBuilder.Add(new(item));
-				}
+				syncRootBuilder.Add(new(item));
 			}
+		}
 
 		return (_syncRoots = syncRootBuilder.DrainToImmutable()) is []
 			? ValidationResult.Error("No sync roots specified")
@@ -211,7 +212,7 @@ internal class PruneCommand : IAppCommand<PruneCommand.PruneCommandSettings>
 				InfoClass: CF_SYNC_ROOT_INFO_CLASS.CF_SYNC_ROOT_INFO_BASIC,
 				InfoBuffer: &info,
 				InfoBufferLength: (uint)Marshal.SizeOf<CF_SYNC_ROOT_BASIC_INFO>(),
-				ReturnedLength: null).Succeeded;
+				ReturnedLength: out _).Succeeded;
 		}
 	}
 

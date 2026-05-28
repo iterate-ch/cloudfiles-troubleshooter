@@ -8,7 +8,7 @@ internal interface IAppCommand<TSettings> : ICommand<TSettings>
 {
 	ValidationResult Validate(CommandContext context, TSettings settings) => ValidationResult.Success();
 
-	Task<int> ICommand.Execute(CommandContext context, CommandSettings settings) => Execute(context, (TSettings)settings);
+	Task<int> ICommand.ExecuteAsync(CommandContext context, CommandSettings settings, CancellationToken cancellationToken) => ExecuteAsync(context, (TSettings)settings, cancellationToken);
 
 	ValidationResult ICommand.Validate(CommandContext context, CommandSettings settings) => Validate(context, (TSettings)settings);
 }
