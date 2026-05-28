@@ -97,7 +97,7 @@ internal class CleanCommand : IAppCommand<CleanCommand.CleanCommandSettings>
 
 			if (!userExclusive)
 			{
-				MarkupLineInterpolated($"[yellow]Keeping {syncRootId}, registered for multiple users.[/]");
+				MarkupLineInterpolated($"[yellow]Keeping {syncRootId.Key}, registered for multiple users.[/]");
 				continue;
 			}
 
